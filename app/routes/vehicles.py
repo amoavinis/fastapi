@@ -1,0 +1,66 @@
+from fastapi import FastAPI, Response, status, HTTPException, Depends, APIRouter
+from sqlalchemy.orm import Session
+from typing import List, Optional
+
+from sqlalchemy import func
+from .. import models, schemas
+from ..db.database import get_db
+
+router = APIRouter(
+    prefix="/vehicles",
+    tags=["Vehicles"]
+)
+
+@router.get("/", response_model=List[schemas.Vehicle])
+def get_vehicles(db: Session = Depends(get_db)):
+    vehicles = db.query(models.Vehicle).all()
+
+    return vehicles
+
+@router.get("/{id}", response_model=schemas.Vehicle)
+def get_vehicles(id: int, db: Session = Depends(get_db)):
+    vehicle = db.query(models.Vehicle).filter(models.Vehicle.id == id).first()
+
+    if not vehicle:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Vehicle with id: {id} was not found.")
+
+    return vehicle
+
+@router.post("/", status_code=status.HTTP_201_CREATED, response_model=schemas.Vehicle)
+def create_vehicle(vehicle: schemas.VehicleCreate, db: Session = Depends(get_db)):
+    new_vehicle = models.Vehicle(**vehicle.model_dump())
+    db.add(new_vehicle)
+    db.commit()
+    db.refresh(new_vehicle)
+
+    return new_vehicle
+
+@router.put("/{id}", response_model=schemas.Vehicle)
+def update_vehicle(id: int, updated_vehicle: schemas.VehicleCreate, db: Session = Depends(get_db)):
+    query = db.query(models.Vehicle).filter(models.Vehicle.id == id)
+
+    vehicle = query.first()
+
+    if vehicle == None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail=f"Vehicle with id: {id} was not found.")
+
+    query.update(updated_vehicle.model_dump(), synchronize_session=False)
+    db.commit()
+
+    return query.first()
+
+@router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_vehicle(id: int, db: Session = Depends(get_db)):
+    query = db.query(models.Vehicle).filter(models.Vehicle.id == id)
+    
+    vehicle = query.first()
+
+    if vehicle == None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail=f"Vehicle with id: {id} was not found.")
+
+    query.delete(synchronize_session=False)
+    db.commit()
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

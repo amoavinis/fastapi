@@ -1,3 +1,4 @@
 from .vehicle import Vehicle, VehicleCreate, VehicleBase
+from .user import User, UserCreate, UserBase
 
-__all__ = ["Vehicle", "VehicleCreate", "VehicleBase"]
+__all__ = ["Vehicle", "VehicleCreate", "VehicleBase", "User", "UserCreate", "UserBase"]

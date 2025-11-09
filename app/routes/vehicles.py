@@ -1,10 +1,10 @@
-from fastapi import FastAPI, Response, status, HTTPException, Depends, APIRouter
+from fastapi import Response, status, HTTPException, Depends, APIRouter
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List
 
-from sqlalchemy import func
 from .. import models, schemas
 from ..db.database import get_db
+from ..utils.auth import get_current_user
 
 router = APIRouter(
     prefix="/vehicles",
@@ -12,13 +12,20 @@ router = APIRouter(
 )
 
 @router.get("/", response_model=List[schemas.Vehicle])
-def get_vehicles(db: Session = Depends(get_db)):
+def get_vehicles(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
     vehicles = db.query(models.Vehicle).all()
 
     return vehicles
 
 @router.get("/{id}", response_model=schemas.Vehicle)
-def get_vehicles(id: int, db: Session = Depends(get_db)):
+def get_vehicles(
+    id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
     vehicle = db.query(models.Vehicle).filter(models.Vehicle.id == id).first()
 
     if not vehicle:
@@ -27,7 +34,11 @@ def get_vehicles(id: int, db: Session = Depends(get_db)):
     return vehicle
 
 @router.post("/", status_code=status.HTTP_201_CREATED, response_model=schemas.Vehicle)
-def create_vehicle(vehicle: schemas.VehicleCreate, db: Session = Depends(get_db)):
+def create_vehicle(
+    vehicle: schemas.VehicleCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
     new_vehicle = models.Vehicle(**vehicle.model_dump())
     db.add(new_vehicle)
     db.commit()
@@ -36,7 +47,12 @@ def create_vehicle(vehicle: schemas.VehicleCreate, db: Session = Depends(get_db)
     return new_vehicle
 
 @router.put("/{id}", response_model=schemas.Vehicle)
-def update_vehicle(id: int, updated_vehicle: schemas.VehicleCreate, db: Session = Depends(get_db)):
+def update_vehicle(
+    id: int,
+    updated_vehicle: schemas.VehicleCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
     query = db.query(models.Vehicle).filter(models.Vehicle.id == id)
 
     vehicle = query.first()
@@ -51,9 +67,13 @@ def update_vehicle(id: int, updated_vehicle: schemas.VehicleCreate, db: Session 
     return query.first()
 
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_vehicle(id: int, db: Session = Depends(get_db)):
+def delete_vehicle(
+    id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
     query = db.query(models.Vehicle).filter(models.Vehicle.id == id)
-    
+
     vehicle = query.first()
 
     if vehicle == None:

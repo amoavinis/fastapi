@@ -4,7 +4,9 @@ from typing import List
 
 from .. import models, schemas
 from ..db.database import get_db
-from ..utils.password import hash_password
+from ..utils.password import hash_password, verify_password
+from ..utils.jwt import create_access_token
+from ..utils.auth import get_current_user, get_current_admin_user
 
 router = APIRouter(
     prefix="/users",
@@ -12,7 +14,11 @@ router = APIRouter(
 )
 
 @router.post("/", status_code=status.HTTP_201_CREATED, response_model=schemas.User)
-def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
+def create_user(
+    user: schemas.UserCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_admin_user)
+):
     # Check if username already exists
     existing_user = db.query(models.User).filter(models.User.username == user.username).first()
     if existing_user:
@@ -36,12 +42,19 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     return new_user
 
 @router.get("/", response_model=List[schemas.User])
-def get_users(db: Session = Depends(get_db)):
+def get_users(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
     users = db.query(models.User).all()
     return users
 
 @router.get("/{id}", response_model=schemas.User)
-def get_user(id: int, db: Session = Depends(get_db)):
+def get_user(
+    id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
     user = db.query(models.User).filter(models.User.id == id).first()
 
     if not user:
@@ -51,3 +64,27 @@ def get_user(id: int, db: Session = Depends(get_db)):
         )
 
     return user
+
+@router.post("/login", response_model=schemas.Token)
+def login(credentials: schemas.LoginRequest, db: Session = Depends(get_db)):
+    # Find user by username
+    user = db.query(models.User).filter(models.User.username == credentials.username).first()
+
+    # Check if user exists and password is correct
+    if not user or not verify_password(credentials.password, user.password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Create JWT token with user data
+    access_token = create_access_token(
+        data={
+            "user_id": user.id,
+            "username": user.username,
+            "is_admin": user.is_admin
+        }
+    )
+
+    return {"access_token": access_token, "token_type": "bearer"}

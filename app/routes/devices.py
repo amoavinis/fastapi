@@ -1,10 +1,12 @@
 from fastapi import Response, status, HTTPException, Depends, APIRouter
 from sqlalchemy.orm import Session
 from typing import List
+from datetime import datetime, timezone
 
 from .. import models, schemas
 from ..db.database import get_db
 from ..utils.auth import get_current_user
+from ..utils.websocket import manager
 
 router = APIRouter(
     prefix="/devices",
@@ -121,3 +123,75 @@ def delete_device(
     db.commit()
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+@router.patch("/{id}/status", response_model=schemas.Device)
+async def update_device_status(
+    id: int,
+    status_update: schemas.DeviceStatusUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    query = db.query(models.Device).filter(models.Device.id == id)
+
+    device = query.first()
+
+    if device == None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail=f"Device with id: {id} was not found.")
+
+    query.update({"status": status_update.status}, synchronize_session=False)
+    db.commit()
+
+    updated_device = query.first()
+
+    # Broadcast status update via WebSocket (using vehicle_id if device is linked)
+    if updated_device.vehicle_id:
+        await manager.broadcast_vehicle_update(updated_device.vehicle_id, {
+            "type": "status_update",
+            "device_id": id,
+            "vehicle_id": updated_device.vehicle_id,
+            "status": status_update.status,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+
+    return updated_device
+
+@router.patch("/{id}/position", response_model=schemas.Device)
+async def update_device_position(
+    id: int,
+    position_update: schemas.DevicePositionUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    query = db.query(models.Device).filter(models.Device.id == id)
+
+    device = query.first()
+
+    if device == None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail=f"Device with id: {id} was not found.")
+
+    position_updated_time = datetime.now(timezone.utc)
+
+    query.update({
+        "last_latitude": position_update.latitude,
+        "last_longitude": position_update.longitude,
+        "position_updated_dt": position_updated_time
+    }, synchronize_session=False)
+    db.commit()
+
+    updated_device = query.first()
+
+    # Broadcast position update via WebSocket (using vehicle_id if device is linked)
+    if updated_device.vehicle_id:
+        await manager.broadcast_vehicle_update(updated_device.vehicle_id, {
+            "type": "position_update",
+            "device_id": id,
+            "vehicle_id": updated_device.vehicle_id,
+            "latitude": position_update.latitude,
+            "longitude": position_update.longitude,
+            "position_updated_dt": position_updated_time.isoformat(),
+            "timestamp": position_updated_time.isoformat()
+        })
+
+    return updated_device

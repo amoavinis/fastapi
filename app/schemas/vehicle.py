@@ -15,19 +15,8 @@ class VehicleUpdate(BaseModel):
     model: Optional[str] = None
     year: Optional[int] = None
 
-class VehicleStatusUpdate(BaseModel):
-    status: bool
-
-class VehiclePositionUpdate(BaseModel):
-    latitude: float
-    longitude: float
-
 class Vehicle(VehicleBase):
     id: int
-    status: Optional[bool] = None
-    last_latitude: Optional[float] = None
-    last_longitude: Optional[float] = None
-    position_updated_dt: Optional[datetime] = None
     created_dt: datetime
     updated_dt: datetime
 
